@@ -2,6 +2,7 @@ import torch
 from torch import nn
 from torch.distributions.multivariate_normal import MultivariateNormal
 import torch.nn.functional as F
+import numpy as np
 
 def init_weights(m):
   if type(m) == nn.Linear:
@@ -17,7 +18,7 @@ def FFLayer(input_size, output_size):
 def FFDropoutLayer(input_size, output_size, dropout_p=.2):
   return nn.Sequential(*[
     nn.Linear(input_size, output_size),
-    nn.Dropout(dropout_p=p),
+    nn.Dropout(dropout_p),
     nn.ReLU()
   ])
 
@@ -25,14 +26,14 @@ def FFDropoutLayer(input_size, output_size, dropout_p=.2):
 class AleatoricNN(nn.Module):
   def __init__(self, input_size, output_size, hidden_size, hidden_count):
     super(AleatoricNN, self).__init__()
-    self.mu = nn.Sequential([
+    self.mu = nn.Sequential(*[
       FFLayer(input_size, hidden_size),
-      *[FFLayer(hidden_size, hidden_size) for i in range(hidden_count)]
+      *[FFLayer(hidden_size, hidden_size) for i in range(hidden_count)],
       nn.Linear(hidden_size, output_size)
     ])
-    self.log_sigma2 = nn.Sequential([
+    self.log_sigma2 = nn.Sequential(*[
       FFLayer(input_size, hidden_size),
-      *[FFLayer(hidden_size, hidden_size) for i in range(hidden_count)]
+      *[FFLayer(hidden_size, hidden_size) for i in range(hidden_count)],
       nn.Linear(hidden_size, 1)
     ])
   def forward(self, x):
@@ -46,21 +47,37 @@ class AleatoricLoss(torch.nn.Module):
     self.class_count = class_count
 
   def forward(self, mu, log_sigma2, y):
-    loss = []
+    y_hat = []
+    
     for t in range(self.T):
-      x = torch.zeros_like(mu)
-      for i, xi in enumerate(x):
-        e = self.mvn.sample()
-        x[i] = mu[i] +  torch.exp(log_sigma2[i]) * e
+      y_hat.append( F.log_softmax(mu + torch.exp(log_sigma2)*self.mvn.sample((len(mu),)), dim=1) - np.log(self.T))
 
-      loss.append(F.cross_entropy(x, y, reduction='none') - np.log(self.T) )
-
-    loss = torch.stack( tuple(loss) )
-    return sum(torch.logsumexp(loss, dim=0))
+    return F.nll_loss(torch.logsumexp(torch.stack(tuple(y_hat)), dim=0), y)
 
 def EpistemicNN(input_size, output_size, hidden_size, hidden_count):
-  return nn.Sequential([
+  return nn.Sequential(*[
       FFDropoutLayer(input_size, hidden_size),
-      *[FFDropoutLayer(hidden_size, hidden_size) for i in range(hidden_count)]
+      *[FFDropoutLayer(hidden_size, hidden_size) for i in range(hidden_count)],
       nn.Linear(hidden_size, output_size)
     ])
+
+
+class CombinedNN(nn.Module):
+  def __init__(self, input_size, output_size, hidden_size, hidden_count):
+    super(CombinedNN, self).__init__()
+    self.backbone = nn.Sequential(*[
+      FFDropoutLayer(input_size, hidden_size),
+      *[FFDropoutLayer(hidden_size, hidden_size) for i in range(hidden_count)]
+    ])
+    self.mu = nn.Linear(hidden_size, output_size)
+    self.log_sigma2 = nn.Linear(hidden_size, 1)
+
+  def forward(self, x):
+    embedded = self.backbone(x)
+    return self.mu(embedded), self.log_sigma2(embedded)
+
+def accuracy_score(p, y):
+  _, predicted = torch.max(p.data, 1)
+  total = y.size(0)
+  correct = (predicted == y).sum().item()
+  return correct/total

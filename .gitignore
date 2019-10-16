@@ -1,3 +1,8 @@
+# dataset
+data/
+# saved model files
+*.pt
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
