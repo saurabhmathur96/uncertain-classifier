@@ -3,5 +3,6 @@ An image classifier that quantifies its uncertainty using Bayesian methods as de
 
 ## Aleatoric uncertainty
 <img src="./low_combined_aleatoric.png">
+
 ## Epistemic uncertainty
 <img src="./low_combined_epistemic.png">
