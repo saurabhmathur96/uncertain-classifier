@@ -12,7 +12,7 @@ def predict(data, net, T=50, class_count=10):
   y_hat = torch.zeros_like(mu)
     
   for t in range(T):
-    y_hat += F.softmax(mu + torch.exp(log_sigma2)*mvn.sample((len(mu),)), dim=1).detach() / T
+    y_hat += F.softmax(mu + torch.exp(0.5*log_sigma2)*mvn.sample((len(mu),)), dim=1).detach() / T
 
   return y_hat / T
 
@@ -20,11 +20,14 @@ def predict(data, net, T=50, class_count=10):
 class Net(nn.Module):
   def __init__(self, input_size, output_size, hidden_size, hidden_count):
     super(Net, self).__init__()
-    self.mu = neural_net.FFLayers(input_size, output_size, hidden_size, hidden_count)
-    self.log_sigma2 = neural_net.FFLayers(input_size, 1, hidden_size, hidden_count)
-  
+    # self.mu = neural_net.FFLayers(input_size, output_size, hidden_size, hidden_count)
+    # self.log_sigma2 = neural_net.FFLayers(input_size, output_size, hidden_size, hidden_count)
+    self.output_size = output_size
+    self.backbone = neural_net.FFLayers(input_size, output_size*2, hidden_size, hidden_count)
   def forward(self, x):
-    return self.mu(x), self.log_sigma2(x)
+    output = self.backbone(x)
+    return output[:, :self.output_size], output[:, self.output_size:]
+    # self.mu(x), self.log_sigma2(x)
 
 class Loss(torch.nn.Module):
   def __init__(self, class_count=10, T=25):
@@ -39,7 +42,7 @@ class Loss(torch.nn.Module):
     
     for t in range(self.T):
       epsilon = self.mvn.sample((len(mu),))
-      numerator = F.log_softmax(mu + torch.exp(log_sigma2)*epsilon, dim=1)
+      numerator = F.log_softmax(mu + torch.exp(0.5*log_sigma2)*epsilon, dim=1)
       y_hat.append( numerator - np.log(self.T))
 
     y_hat = torch.stack(tuple(y_hat))
