@@ -10,7 +10,7 @@ An image classifier that quantifies its uncertainty using Bayesian methods as de
 
 
 ## Aleatoric uncertainty
-- Data is out-of-domain, i.e. the image is noisy.
+- Data is out-of-domain or the data is noisy.
 - Cannot be fixed with more data
 
 <img src="./combined_aleatoric_high.png">
